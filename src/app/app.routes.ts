@@ -9,6 +9,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent)
   },
   {
+    path: 'staff',
+    loadComponent: () => import('./features/staff/staff-dashboard/staff-dashboard.component').then(m => m.StaffDashboardComponent),
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: [UserRole.STAFF] }
+  },
+  {
     path: 'login',
     loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent)
   },
@@ -67,6 +73,18 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin/manage-customers/manage-customers.component').then(m => m.ManageCustomersComponent),
     canActivate: [AuthGuard, RoleGuard],
     data: { roles: [UserRole.ADMIN] }
+  },
+  {
+    path: 'admin/complaints',
+    loadComponent: () => import('./features/admin/manage-complaints/manage-complaints.component').then(m => m.ManageComplaintsComponent),
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: [UserRole.ADMIN] }
+  },
+  {
+    path: 'staff/complaints',
+    loadComponent: () => import('./features/admin/manage-complaints/manage-complaints.component').then(m => m.ManageComplaintsComponent),
+    canActivate: [AuthGuard, RoleGuard],
+    data: { roles: [UserRole.STAFF] }
   },
   {
     path: 'unauthorized',

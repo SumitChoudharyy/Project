@@ -32,7 +32,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
-// Note: NavbarComponent and LoadingSpinnerComponent are now standalone components
+// Note: NavbarComponent, LoadingSpinnerComponent, and popup components are now standalone components
 // and should be imported directly where needed
 
 const MATERIAL_MODULES = [

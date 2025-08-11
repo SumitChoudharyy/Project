@@ -46,6 +46,44 @@ export class MockDataService {
       createdAt: new Date('2024-01-15'),
       loginAttempts: 0,
       isLocked: false
+    },
+    {
+      id: '3',
+      email: 'staff.billing@hotel.com',
+      firstName: 'Bill',
+      lastName: 'Manager',
+      phoneNumber: '+1111111111',
+      address: {
+        street: '789 Billing Rd',
+        city: 'Finance City',
+        state: 'FC',
+        zipCode: '24680',
+        country: 'USA'
+      },
+      role: UserRole.STAFF,
+      isActive: true,
+      createdAt: new Date('2024-02-01'),
+      loginAttempts: 0,
+      isLocked: false
+    },
+    {
+      id: '4',
+      email: 'staff.maintenance@hotel.com',
+      firstName: 'Manny',
+      lastName: 'Tech',
+      phoneNumber: '+2222222222',
+      address: {
+        street: '101 Maintenance Ln',
+        city: 'Service City',
+        state: 'SC',
+        zipCode: '13579',
+        country: 'USA'
+      },
+      role: UserRole.STAFF,
+      isActive: true,
+      createdAt: new Date('2024-03-01'),
+      loginAttempts: 0,
+      isLocked: false
     }
   ];
 
@@ -54,36 +92,45 @@ export class MockDataService {
       id: '1',
       roomNumber: '101',
       type: RoomType.SINGLE,
+      category: 'Standard',
       description: 'Comfortable single room with city view',
       amenities: ['WiFi', 'TV', 'AC', 'Mini Bar'],
       pricePerNight: 150,
       maxOccupancy: 1,
+      capacity: 1,
       images: ['https://images.pexels.com/photos/164595/pexels-photo-164595.jpeg'],
       isActive: true,
+      available: true,
       floor: 1
     },
     {
       id: '2',
       roomNumber: '201',
       type: RoomType.DOUBLE,
+      category: 'Deluxe',
       description: 'Spacious double room with balcony',
       amenities: ['WiFi', 'TV', 'AC', 'Mini Bar', 'Balcony'],
       pricePerNight: 250,
       maxOccupancy: 2,
+      capacity: 2,
       images: ['https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg'],
       isActive: true,
+      available: true,
       floor: 2
     },
     {
       id: '3',
       roomNumber: '301',
       type: RoomType.SUITE,
+      category: 'Suite',
       description: 'Luxury suite with separate living area',
       amenities: ['WiFi', 'TV', 'AC', 'Mini Bar', 'Living Area', 'Jacuzzi'],
       pricePerNight: 450,
       maxOccupancy: 4,
+      capacity: 4,
       images: ['https://images.pexels.com/photos/1743229/pexels-photo-1743229.jpeg'],
       isActive: true,
+      available: true,
       floor: 3
     }
   ];
@@ -106,16 +153,31 @@ export class MockDataService {
 
   private complaints: Complaint[] = [
     {
-      id: '1',
+      complaintId: 'COMP001',
       customerId: '2',
       bookingId: '1',
       title: 'Room cleanliness issue',
       description: 'The room was not properly cleaned upon arrival',
       category: ComplaintCategory.ROOM,
       priority: Priority.MEDIUM,
-      status: ComplaintStatus.OPEN,
-      createdAt: new Date('2024-12-01'),
-      updatedAt: new Date('2024-12-01')
+      status: ComplaintStatus.ACTIVE,
+      createdAt: '2024-12-01',
+      updatedAt: '2024-12-01',
+      actions: []
+    },
+    {
+      complaintId: 'COMP002',
+      customerId: '2',
+      bookingId: '1',
+      title: 'Incorrect billing amount',
+      description: 'I was charged twice for minibar usage',
+      category: ComplaintCategory.BILLING,
+      priority: Priority.HIGH,
+      status: ComplaintStatus.RESOLVED,
+      assignedStaffId: '3',
+      createdAt: '2024-12-02',
+      updatedAt: '2024-12-02',
+      actions: []
     }
   ];
 
@@ -133,6 +195,10 @@ export class MockDataService {
 
   getComplaints(): Complaint[] {
     return [...this.complaints];
+  }
+
+  getComplaintById(complaintId: string): Complaint | null {
+    return this.complaints.find(c => c.complaintId === complaintId) || null;
   }
 
   addUser(user: User): void {
@@ -170,7 +236,7 @@ export class MockDataService {
   }
 
   updateComplaint(complaintId: string, updates: Partial<Complaint>): Complaint | null {
-    const index = this.complaints.findIndex(c => c.id === complaintId);
+    const index = this.complaints.findIndex(c => c.complaintId === complaintId);
     if (index !== -1) {
       this.complaints[index] = { ...this.complaints[index], ...updates };
       return this.complaints[index];

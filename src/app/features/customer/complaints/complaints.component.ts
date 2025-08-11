@@ -4,7 +4,7 @@ import { Store } from '@ngrx/store';
 import { Observable } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { User } from '../../../models/user.model';
-import { Complaint, ComplaintCategory, Priority } from '../../../models/complaint.model';
+import { Complaint, ComplaintStatus } from '../../../models/complaint.model';
 import { selectUser } from '../../../store/auth/auth.selectors';
 import { ComplaintService } from '../../../services/complaint.service';
 import { SharedModule } from '../../../shared/shared.module';
@@ -33,50 +33,6 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 
               <mat-card-content>
                 <form [formGroup]="complaintForm" (ngSubmit)="onSubmit()">
-                  <div class="form-row">
-                    <mat-form-field appearance="outline" class="half-width">
-                      <mat-label>Category</mat-label>
-                      <mat-select formControlName="category">
-                        <mat-option value="room">Room Issues</mat-option>
-                        <mat-option value="service">Service Quality</mat-option>
-                        <mat-option value="billing">Billing & Payment</mat-option>
-                        <mat-option value="amenities">Amenities</mat-option>
-                        <mat-option value="staff">Staff Behavior</mat-option>
-                        <mat-option value="other">Other</mat-option>
-                      </mat-select>
-                      <mat-error *ngIf="complaintForm.get('category')?.hasError('required')">
-                        Please select a category
-                      </mat-error>
-                    </mat-form-field>
-
-                    <mat-form-field appearance="outline" class="half-width">
-                      <mat-label>Priority</mat-label>
-                      <mat-select formControlName="priority">
-                        <mat-option value="low">Low</mat-option>
-                        <mat-option value="medium">Medium</mat-option>
-                        <mat-option value="high">High</mat-option>
-                        <mat-option value="urgent">Urgent</mat-option>
-                      </mat-select>
-                      <mat-error *ngIf="complaintForm.get('priority')?.hasError('required')">
-                        Please select priority level
-                      </mat-error>
-                    </mat-form-field>
-                  </div>
-
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>Title</mat-label>
-                    <input matInput formControlName="title" placeholder="Brief description of the issue">
-                    <mat-error *ngIf="complaintForm.get('title')?.hasError('required')">
-                      Title is required
-                    </mat-error>
-                    <mat-error *ngIf="complaintForm.get('title')?.hasError('minlength')">
-                      Title must be at least 5 characters long
-                    </mat-error>
-                    <mat-error *ngIf="complaintForm.get('title')?.hasError('maxlength')">
-                      Title cannot exceed 100 characters
-                    </mat-error>
-                  </mat-form-field>
-
                   <mat-form-field appearance="outline" class="full-width">
                     <mat-label>Description</mat-label>
                     <textarea matInput formControlName="description" 
@@ -92,12 +48,6 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
                     <mat-error *ngIf="complaintForm.get('description')?.hasError('maxlength')">
                       Description cannot exceed 1000 characters
                     </mat-error>
-                  </mat-form-field>
-
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>Related Booking ID (Optional)</mat-label>
-                    <input matInput formControlName="bookingId" placeholder="Enter booking ID if applicable">
-                    <mat-hint>Leave empty if not related to a specific booking</mat-hint>
                   </mat-form-field>
 
                   <div class="form-actions">
@@ -133,29 +83,25 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
                 <mat-card-content>
                   <div class="complaint-header">
                     <div class="complaint-info">
-                      <h3>{{ complaint.title }}</h3>
+                      <h3>Complaint #{{ complaint.complaintId }}</h3>
                       <div class="complaint-meta">
-                        <span class="complaint-id">ID: {{ complaint.id }}</span>
+                        <span class="complaint-id">ID: {{ complaint.complaintId }}</span>
                         <span class="complaint-date">{{ complaint.createdAt | date:'mediumDate' }}</span>
                       </div>
                     </div>
                     <div class="complaint-status">
                       <div class="status-chips">
-                        <span class="status-chip" [ngClass]="'status-' + complaint.status">
+                        <span class="status-chip" [ngClass]="'status-' + complaint.status.toLowerCase()">
                           {{ complaint.status | titlecase }}
                         </span>
-                        <span class="priority-chip" [ngClass]="'priority-' + complaint.priority">
-                          {{ complaint.priority | titlecase }}
-                        </span>
                       </div>
-                      <span class="category-chip">{{ complaint.category | titlecase }}</span>
                     </div>
                   </div>
 
                   <div class="complaint-details">
                     <p class="complaint-description">{{ complaint.description }}</p>
                     
-                    <div class="complaint-timeline" *ngIf="complaint.status !== 'open'">
+                    <div class="complaint-timeline">
                       <div class="timeline-item">
                         <mat-icon>create</mat-icon>
                         <div class="timeline-content">
@@ -164,32 +110,31 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
                         </div>
                       </div>
                       
-                      <div class="timeline-item" *ngIf="complaint.assignedStaffId">
-                        <mat-icon>assignment_ind</mat-icon>
+                      <div class="timeline-item">
+                        <mat-icon>update</mat-icon>
                         <div class="timeline-content">
-                          <strong>Assigned to Staff</strong>
+                          <strong>Last Updated</strong>
                           <span>{{ complaint.updatedAt | date:'medium' }}</span>
                         </div>
                       </div>
 
-                      <div class="timeline-item" *ngIf="complaint.status === 'resolved' && complaint.resolution">
+                      <div class="timeline-item" *ngIf="complaint.status === 'RESOLVED'">
                         <mat-icon>check_circle</mat-icon>
                         <div class="timeline-content">
                           <strong>Resolved</strong>
-                          <span>{{ complaint.resolvedAt | date:'medium' }}</span>
-                          <p class="resolution-text">{{ complaint.resolution }}</p>
+                          <span>{{ complaint.updatedAt | date:'medium' }}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </mat-card-content>
 
-                <mat-card-actions *ngIf="complaint.status === 'open'">
+                <mat-card-actions *ngIf="complaint.status === 'ACTIVE'">
                   <button mat-button color="primary" (click)="editComplaint(complaint)">
                     <mat-icon>edit</mat-icon>
                     Edit
                   </button>
-                  <button mat-button color="warn" (click)="cancelComplaint(complaint)">
+                  <button mat-button color="warn" (click="cancelComplaint(complaint)">
                     <mat-icon>cancel</mat-icon>
                     Cancel
                   </button>
@@ -238,13 +183,8 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
       margin: 0 auto;
     }
 
-    .form-row {
-      display: flex;
-      gap: 16px;
-    }
-
-    .half-width {
-      flex: 1;
+    .full-width {
+      width: 100%;
     }
 
     .form-actions {
@@ -327,57 +267,21 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
       gap: 8px;
     }
 
-    .status-chip, .priority-chip, .category-chip {
+    .status-chip {
       padding: 4px 12px;
       border-radius: 16px;
       font-size: 12px;
       font-weight: 500;
     }
 
-    .status-open {
+    .status-active {
       background-color: #e3f2fd;
       color: #1976d2;
-    }
-
-    .status-in_progress {
-      background-color: #fff3e0;
-      color: #f57c00;
     }
 
     .status-resolved {
       background-color: #e8f5e8;
       color: #2e7d32;
-    }
-
-    .status-closed {
-      background-color: #f3e5f5;
-      color: #7b1fa2;
-    }
-
-    .priority-low {
-      background-color: #f1f8e9;
-      color: #558b2f;
-    }
-
-    .priority-medium {
-      background-color: #fff8e1;
-      color: #f9a825;
-    }
-
-    .priority-high {
-      background-color: #ffebee;
-      color: #c62828;
-    }
-
-    .priority-urgent {
-      background-color: #ffebee;
-      color: #c62828;
-      border: 2px solid #c62828;
-    }
-
-    .category-chip {
-      background-color: #f5f5f5;
-      color: #666;
     }
 
     .complaint-description {
@@ -425,25 +329,11 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
       font-size: 12px;
     }
 
-    .resolution-text {
-      color: #333;
-      font-size: 14px;
-      margin: 8px 0 0 0;
-      padding: 8px;
-      background: white;
-      border-radius: 4px;
-    }
-
     .loading-section {
       padding: 40px 0;
     }
 
     @media (max-width: 768px) {
-      .form-row {
-        flex-direction: column;
-        gap: 0;
-      }
-
       .complaint-header {
         flex-direction: column;
         gap: 12px;
@@ -473,19 +363,11 @@ export class ComplaintsComponent implements OnInit {
     private snackBar: MatSnackBar
   ) {
     this.complaintForm = this.fb.group({
-      category: ['', Validators.required],
-      priority: ['medium', Validators.required],
-      title: ['', [
-        Validators.required,
-        Validators.minLength(5),
-        Validators.maxLength(100)
-      ]],
       description: ['', [
         Validators.required,
         Validators.minLength(20),
         Validators.maxLength(1000)
-      ]],
-      bookingId: ['']
+      ]]
     });
   }
 
@@ -496,11 +378,21 @@ export class ComplaintsComponent implements OnInit {
   private loadComplaints(): void {
     this.user$.subscribe(user => {
       if (user) {
-        this.complaintService.getComplaintsByCustomer(user.id).subscribe(complaints => {
-          this.complaints = complaints.sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          this.isLoading = false;
+        this.complaintService.getComplaintsByCustomer(user.id).subscribe({
+          next: (complaints) => {
+            this.complaints = complaints.sort((a, b) => 
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+            this.isLoading = false;
+          },
+          error: (error) => {
+            console.error('Error loading complaints:', error);
+            this.isLoading = false;
+            this.snackBar.open('Failed to load complaints. Please try again.', 'Close', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+          }
         });
       }
     });
@@ -512,13 +404,9 @@ export class ComplaintsComponent implements OnInit {
       
       this.user$.subscribe(user => {
         if (user) {
-          const complaintData = {
-            ...this.complaintForm.value,
-            category: this.complaintForm.value.category as ComplaintCategory,
-            priority: this.complaintForm.value.priority as Priority
-          };
+          const description = this.complaintForm.value.description;
 
-          this.complaintService.createComplaint(user.id, complaintData).subscribe({
+          this.complaintService.createComplaint(user.id, description).subscribe({
             next: (complaint) => {
               this.complaints.unshift(complaint);
               this.resetForm();
@@ -543,9 +431,7 @@ export class ComplaintsComponent implements OnInit {
   }
 
   resetForm(): void {
-    this.complaintForm.reset({
-      priority: 'medium'
-    });
+    this.complaintForm.reset();
   }
 
   switchToSubmitTab(): void {

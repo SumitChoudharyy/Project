@@ -3,14 +3,16 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Observable, of } from 'rxjs';
 import { Room, RoomType, SearchCriteria } from '../../../models/room.model';
 import { BookingService } from '../../../services/booking.service';
-import { MockDataService } from '../../../services/mock-data.service';
+import { RoomService } from '../../../services/room.service';
 import { SharedModule } from '../../../shared/shared.module';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { CreateBookingComponent, CreateBookingData } from '../create-booking/create-booking.component';
 
 @Component({
   selector: 'app-search-rooms',
   standalone: true,
-  imports: [SharedModule, LoadingSpinnerComponent],
+  imports: [SharedModule, LoadingSpinnerComponent, MatDialogModule],
   template: `
     <div class="search-container">
       <!-- Search Form -->
@@ -454,7 +456,8 @@ export class SearchRoomsComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private bookingService: BookingService,
-    private mockData: MockDataService
+    private roomService: RoomService,
+    private dialog: MatDialog
   ) {
     this.searchForm = this.fb.group({
       checkInDate: ['', Validators.required],
@@ -507,7 +510,8 @@ export class SearchRoomsComponent implements OnInit {
         amenities: this.selectedAmenities
       };
 
-      this.bookingService.searchRooms(criteria).subscribe({
+      // Use the new room service for API integration
+      this.roomService.searchRoomsWithCriteria(criteria).subscribe({
         next: (rooms) => {
           this.searchResults = rooms;
           this.sortResults();
@@ -515,6 +519,7 @@ export class SearchRoomsComponent implements OnInit {
         },
         error: (error) => {
           console.error('Search error:', error);
+          this.searchResults = [];
           this.isSearching = false;
         }
       });
@@ -571,7 +576,25 @@ export class SearchRoomsComponent implements OnInit {
   }
 
   bookRoom(room: Room): void {
-    // TODO: Navigate to booking page with pre-filled data
-    console.log('Book room:', room);
+    const dialogData: CreateBookingData = {
+      room,
+      checkInDate: this.searchForm.get('checkInDate')?.value,
+      checkOutDate: this.searchForm.get('checkOutDate')?.value,
+      guests: this.searchForm.get('guests')?.value
+    };
+
+    const dialogRef = this.dialog.open(CreateBookingComponent, {
+      width: '800px',
+      maxWidth: '90vw',
+      data: dialogData,
+      disableClose: true
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        console.log('Booking created:', result);
+        // The dialog will handle navigation to bookings page
+      }
+    });
   }
 }

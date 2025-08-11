@@ -14,7 +14,7 @@ export class AuthEffects {
       switchMap(({ credentials }) =>
         this.authService.login(credentials).pipe(
           map(({ user, token }) => AuthActions.loginSuccess({ user, token })),
-          catchError((error) => of(AuthActions.loginFailure({ error: error.toString() })))
+          catchError((error) => of(AuthActions.loginFailure({ error: (error?.error?.message || error?.message || 'Login failed') })))
         )
       )
     )
@@ -25,14 +25,16 @@ export class AuthEffects {
       this.actions$.pipe(
         ofType(AuthActions.loginSuccess),
         tap(({ user, token }) => {
-          // Store token in localStorage
-          localStorage.setItem('token', token);
+          if (token) {
+            localStorage.setItem('token', token);
+          }
           localStorage.setItem('user', JSON.stringify(user));
-          
-          // Redirect based on role
+
           if (user.role === 'admin') {
             this.router.navigate(['/admin']);
-          } else {
+          } else if (user.role === 'staff') {
+            this.router.navigate(['/staff']);
+          } else if (user.role === 'customer') {
             this.router.navigate(['/dashboard']);
           }
         })
@@ -46,7 +48,7 @@ export class AuthEffects {
       switchMap(({ userData }) =>
         this.authService.register(userData).pipe(
           map((user) => AuthActions.registerSuccess({ user })),
-          catchError((error) => of(AuthActions.registerFailure({ error: error.toString() })))
+          catchError((error) => of(AuthActions.registerFailure({ error: (error?.error?.message || error?.message || 'Registration failed') })))
         )
       )
     )

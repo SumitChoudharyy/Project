@@ -5,7 +5,6 @@ import { FormBuilder, FormGroup, Validators, AbstractControl } from '@angular/fo
 import { Store } from '@ngrx/store';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { register, clearError } from '../../../store/auth/auth.actions';
 import { selectAuthLoading, selectAuthError } from '../../../store/auth/auth.selectors';
 
@@ -47,7 +46,7 @@ function passwordMatchValidator(control: AbstractControl): { [key: string]: bool
     MatSelectModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatSnackBarModule,
+    
     MatProgressSpinnerModule
   ],
   template: `
@@ -151,20 +150,7 @@ function passwordMatchValidator(control: AbstractControl): { [key: string]: bool
                     ZIP code is required
                   </mat-error>
                   <mat-error *ngIf="addressGroup.get('zipCode')?.hasError('pattern')">
-                    Please enter a valid ZIP code
-                  </mat-error>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="half-width">
-                  <mat-label>Country</mat-label>
-                  <mat-select formControlName="country">
-                    <mat-option value="USA">United States</mat-option>
-                    <mat-option value="Canada">Canada</mat-option>
-                    <mat-option value="UK">United Kingdom</mat-option>
-                    <mat-option value="Australia">Australia</mat-option>
-                  </mat-select>
-                  <mat-error *ngIf="addressGroup.get('country')?.hasError('required')">
-                    Country is required
+                    Please enter a valid 6-digit ZIP code
                   </mat-error>
                 </mat-form-field>
               </div>
@@ -207,10 +193,11 @@ function passwordMatchValidator(control: AbstractControl): { [key: string]: bool
             </div>
 
             <div class="form-actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="registerForm.invalid || (isLoading$ | async)" class="full-width">
+              <button mat-raised-button color="primary" type="submit" [disabled]="!isFormFilled || (isLoading$ | async)" class="full-width">
                 <span *ngIf="!(isLoading$ | async)">Create Account</span>
                 <mat-spinner *ngIf="isLoading$ | async" diameter="20"></mat-spinner>
               </button>
+              <div class="api-error" *ngIf="(error$ | async) as error">{{ error }}</div>
             </div>
           </form>
         </mat-card-content>
@@ -284,6 +271,12 @@ function passwordMatchValidator(control: AbstractControl): { [key: string]: bool
         gap: 0;
       }
     }
+
+    .api-error {
+      color: #d32f2f;
+      margin-top: 8px;
+      font-size: 12px;
+    }
   `]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
@@ -292,20 +285,35 @@ export class RegisterComponent implements OnInit, OnDestroy {
   hidePassword = true;
   hideConfirmPassword = true;
   isLoading$ = this.store.select(selectAuthLoading);
+  error$ = this.store.select(selectAuthError);
+  get isFormFilled(): boolean {
+    const controls = this.registerForm.controls;
+    const nonEmpty = (key: string) => !!(controls[key]?.value ?? '').toString().trim();
+    return (
+      nonEmpty('firstName') &&
+      nonEmpty('lastName') &&
+      nonEmpty('email') &&
+      nonEmpty('phoneNumber') &&
+      nonEmpty('password') &&
+      nonEmpty('confirmPassword') &&
+      nonEmpty('street') &&
+      nonEmpty('city') &&
+      nonEmpty('state') &&
+      nonEmpty('zipCode')
+    );
+  }
   private destroy$ = new Subject<void>();
 
   constructor(
     private fb: FormBuilder,
     private store: Store,
-    private router: Router,
-    private snackBar: MatSnackBar
+    private router: Router
   ) {
     this.addressGroup = this.fb.group({
-      street: ['', Validators.required],
-      city: ['', Validators.required],
-      state: ['', Validators.required],
-      zipCode: ['', [Validators.required, Validators.pattern(/^\d{5}(-\d{4})?$/)]],
-      country: ['USA', Validators.required]
+      street: [''],
+      city: [''],
+      state: [''],
+      zipCode: ['']
     });
 
     this.registerForm = this.fb.group({
@@ -324,23 +332,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
       street: ['', Validators.required],
       city: ['', Validators.required],
       state: ['', Validators.required],
-      zipCode: ['', [Validators.required, Validators.pattern(/^\d{5}(-\d{4})?$/)]],
-      country: ['USA', Validators.required]
+      zipCode: ['', [Validators.required, Validators.pattern(/^\d{6}$/)]]
     }, { validators: passwordMatchValidator });
   }
 
   ngOnInit(): void {
     // Clear any previous errors
     this.store.dispatch(clearError());
-
-    // Listen for auth errors
-    this.store.select(selectAuthError)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(error => {
-        if (error) {
-          this.snackBar.open(error, 'Close', { duration: 5000 });
-        }
-      });
   }
 
   ngOnDestroy(): void {
@@ -358,17 +356,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
           city: formValue.city,
           state: formValue.state,
           zipCode: formValue.zipCode,
-          country: formValue.country
+          country: ''
         }
       };
 
       this.store.dispatch(register({ userData }));
-      
-      // Show success message and redirect
-      this.snackBar.open('Registration successful! Please log in.', 'Close', { duration: 3000 });
-      setTimeout(() => {
-        this.router.navigate(['/login']);
-      }, 2000);
     }
   }
 }

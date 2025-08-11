@@ -48,13 +48,10 @@ import { RouterModule } from '@angular/router';
           <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Email</mat-label>
-              <input matInput type="email" formControlName="email" placeholder="Enter your email">
+              <input matInput type="text" formControlName="email" placeholder="Enter your email or username">
               <mat-icon matSuffix>email</mat-icon>
               <mat-error *ngIf="loginForm.get('email')?.hasError('required')">
                 Email is required
-              </mat-error>
-              <mat-error *ngIf="loginForm.get('email')?.hasError('email')">
-                Please enter a valid email
               </mat-error>
             </mat-form-field>
 
@@ -77,29 +74,15 @@ import { RouterModule } from '@angular/router';
                 <span *ngIf="!(isLoading$ | async)">Sign In</span>
                 <mat-spinner *ngIf="isLoading$ | async" diameter="20"></mat-spinner>
               </button>
+              <div class="api-error" *ngIf="(error$ | async) as error">{{ error }}</div>
             </div>
           </form>
 
-          <div class="demo-credentials" *ngIf="showDemoCredentials">
-            <mat-divider class="mt-3 mb-2"></mat-divider>
-            <h4>Demo Credentials:</h4>
-            <div class="demo-section">
-              <strong>Admin:</strong> admin&#64;hotel.com / password123
-              <button mat-stroked-button size="small" (click)="fillDemoCredentials('admin')" class="demo-button">Fill</button>
-            </div>
-            <div class="demo-section">
-              <strong>Customer:</strong> customer&#64;email.com / password123
-              <button mat-stroked-button size="small" (click)="fillDemoCredentials('customer')" class="demo-button">Fill</button>
-            </div>
-          </div>
         </mat-card-content>
 
         <mat-card-actions>
           <div class="card-footer">
             <p>Don't have an account? <a routerLink="/register">Sign up here</a></p>
-            <button mat-button (click)="showDemoCredentials = !showDemoCredentials" color="accent">
-              {{ showDemoCredentials ? 'Hide' : 'Show' }} Demo Credentials
-            </button>
           </div>
         </mat-card-actions>
       </mat-card>
@@ -160,6 +143,12 @@ import { RouterModule } from '@angular/router';
       line-height: 24px;
     }
 
+    .api-error {
+      color: #d32f2f;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
     a {
       color: #1976d2;
       text-decoration: none;
@@ -175,16 +164,16 @@ export class LoginComponent implements OnInit, OnDestroy {
   hidePassword = true;
   showDemoCredentials = false;
   isLoading$ = this.store.select(selectAuthLoading);
+  error$ = this.store.select(selectAuthError);
   private destroy$ = new Subject<void>();
 
   constructor(
     private fb: FormBuilder,
     private store: Store,
-    private router: Router,
-    private snackBar: MatSnackBar
+    private router: Router
   ) {
     this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }
@@ -192,15 +181,6 @@ export class LoginComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Clear any previous errors
     this.store.dispatch(clearError());
-
-    // Listen for auth errors
-    this.store.select(selectAuthError)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(error => {
-        if (error) {
-          this.snackBar.open(error, 'Close', { duration: 5000 });
-        }
-      });
 
     // Redirect if already authenticated
     this.store.select(selectUser)
@@ -223,10 +203,12 @@ export class LoginComponent implements OnInit, OnDestroy {
     }
   }
 
-  fillDemoCredentials(type: 'admin' | 'customer'): void {
+  fillDemoCredentials(type: 'admin' | 'customer' | 'staffBilling' | 'staffMaintenance'): void {
     const credentials = {
       admin: { email: 'admin@hotel.com', password: 'password123' },
-      customer: { email: 'customer@email.com', password: 'password123' }
+      customer: { email: 'customer@email.com', password: 'password123' },
+      staffBilling: { email: 'staff.billing@hotel.com', password: 'password123' },
+      staffMaintenance: { email: 'staff.maintenance@hotel.com', password: 'password123' }
     };
 
     this.loginForm.patchValue(credentials[type]);

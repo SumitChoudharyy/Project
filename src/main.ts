@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { authInterceptor } from './app/interceptors/auth.interceptor';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideStore } from '@ngrx/store';
 import { provideEffects } from '@ngrx/effects';
@@ -40,6 +42,7 @@ bootstrapApplication(App, {
   providers: [
     provideRouter(routes),
     provideAnimations(),
+    provideHttpClient(withInterceptors([authInterceptor])),
     provideStore({
       auth: authReducer
     }),

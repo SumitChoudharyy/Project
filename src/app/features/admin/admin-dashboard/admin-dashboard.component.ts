@@ -9,6 +9,8 @@ import { ComplaintService } from '../../../services/complaint.service';
 import { MockDataService } from '../../../services/mock-data.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { selectUser } from '../../../store/auth/auth.selectors';
+import { Booking, BookingStatus, PaymentStatus } from '../../../models/booking.model';
+import { BookingService } from '../../../services/booking.service';
 
 // Angular Material imports
 import { MatCardModule } from '@angular/material/card';
@@ -114,6 +116,73 @@ import { MatSelectModule } from '@angular/material/select';
         </div>
       </div>
 
+            <div class="bookings-section">
+        <h2>All Bookings</h2>
+        <div *ngIf="isLoadingBookings" class="loading"><mat-spinner></mat-spinner></div>
+        <div *ngIf="!isLoadingBookings && bookings.length === 0" class="empty-state">No bookings yet.</div>
+
+        <div class="table-wrapper" *ngIf="!isLoadingBookings && bookings.length > 0">
+          <table mat-table [dataSource]="bookings" class="mat-elevation-z1">
+            <!-- ID -->
+            <ng-container matColumnDef="bookingId">
+              <th mat-header-cell *matHeaderCellDef>ID</th>
+              <td mat-cell *matCellDef="let b">{{ b.id }}</td>
+            </ng-container>
+
+            <!-- Customer -->
+            <ng-container matColumnDef="customer">
+              <th mat-header-cell *matHeaderCellDef>Customer</th>
+              <td mat-cell *matCellDef="let b">{{ getUserName(b.customerId) }}</td>
+            </ng-container>
+
+            <!-- Room -->
+            <ng-container matColumnDef="room">
+              <th mat-header-cell *matHeaderCellDef>Room</th>
+              <td mat-cell *matCellDef="let b">{{ b.roomId }}</td>
+            </ng-container>
+
+            <!-- Dates -->
+            <ng-container matColumnDef="dates">
+              <th mat-header-cell *matHeaderCellDef>Dates</th>
+              <td mat-cell *matCellDef="let b">
+                {{ b.checkInDate | date:'shortDate' }} - {{ b.checkOutDate | date:'shortDate' }}
+              </td>
+            </ng-container>
+
+            <!-- Guests -->
+            <ng-container matColumnDef="guests">
+              <th mat-header-cell *matHeaderCellDef>Guests</th>
+              <td mat-cell *matCellDef="let b">{{ b.guests }}</td>
+            </ng-container>
+
+            <!-- Amount -->
+            <ng-container matColumnDef="amount">
+              <th mat-header-cell *matHeaderCellDef>Amount</th>
+              <td mat-cell *matCellDef="let b">\${{ b.totalAmount | number:'1.2-2' }}</td>
+            </ng-container>
+
+            <!-- Status -->
+            <ng-container matColumnDef="bookingStatus">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let b">
+                <span class="chip status {{b.status}}">{{ b.status | titlecase }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Payment -->
+            <ng-container matColumnDef="payment">
+              <th mat-header-cell *matHeaderCellDef>Payment</th>
+              <td mat-cell *matCellDef="let b">
+                <span class="chip payment {{b.paymentStatus}}">{{ b.paymentStatus | titlecase }}</span>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="bookingDisplayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: bookingDisplayedColumns;"></tr>
+          </table>
+        </div>
+      </div>
+
       <div class="complaints-section">
         <h2>All Complaints</h2>
         <div *ngIf="isLoadingComplaints" class="loading"><mat-spinner></mat-spinner></div>
@@ -148,7 +217,7 @@ import { MatSelectModule } from '@angular/material/select';
             <!-- Priority -->
             <ng-container matColumnDef="priority">
               <th mat-header-cell *matHeaderCellDef>Priority</th>
-              <td mat-cell *matCellDef="let c">
+            <td mat-cell *matCellDef="let c">
                 <span class="chip priority {{c.priority}}">{{ c.priority | titlecase }}</span>
               </td>
             </ng-container>
@@ -282,6 +351,16 @@ import { MatSelectModule } from '@angular/material/select';
     .chip.priority.high { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
     .chip.priority.urgent { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 12px; font-size: 12px; border: 1px solid #c62828; }
     .status-select { min-width: 150px; }
+    
+    .bookings-section { margin-top: 32px; }
+    .chip.status.pending { background: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.status.confirmed { background: #e8f5e8; color: #2e7d32; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.status.checked_in { background: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.status.checked_out { background: #f3e5f5; color: #7b1fa2; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.status.cancelled { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.payment.pending { background: #fff3e0; color: #ef6c00; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.payment.paid { background: #e8f5e8; color: #2e7d32; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .chip.payment.failed { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
   `]
 })
 export class AdminDashboardComponent implements OnInit {
@@ -290,13 +369,20 @@ export class AdminDashboardComponent implements OnInit {
   isLoadingComplaints = true;
   displayedColumns: string[] = ['complaintId', 'customer', 'date', 'category', 'priority', 'assigned', 'status'];
   statusOptions = Object.values(ComplaintStatus);
+  
+  // Bookings
+  bookings: Booking[] = [];
+  isLoadingBookings = true;
+  bookingDisplayedColumns: string[] = ['bookingId', 'customer', 'room', 'dates', 'guests', 'amount', 'bookingStatus', 'payment'];
+  
   private userMap: Record<string, string> = {};
 
   constructor(
     private store: Store,
     private complaintService: ComplaintService,
     private mockData: MockDataService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private bookingService: BookingService
   ) {
     this.user$ = this.store.select(selectUser);
   }
@@ -308,6 +394,7 @@ export class AdminDashboardComponent implements OnInit {
     });
 
     this.loadComplaints();
+    this.loadBookings();
   }
 
   private loadComplaints(): void {
@@ -315,6 +402,14 @@ export class AdminDashboardComponent implements OnInit {
     this.complaintService.getAllComplaints().subscribe(list => {
       this.complaints = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       this.isLoadingComplaints = false;
+    });
+  }
+
+  private loadBookings(): void {
+    this.isLoadingBookings = true;
+    this.bookingService.getAllBookings().subscribe(list => {
+      this.bookings = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      this.isLoadingBookings = false;
     });
   }
 

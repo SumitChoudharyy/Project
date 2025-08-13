@@ -5,6 +5,7 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Booking, BookingRequest, BookingStatus, PaymentStatus, Invoice } from '../models/booking.model';
 import { Room, SearchCriteria, RoomAvailability } from '../models/room.model';
 import { RoomService } from './room.service';
+import { LocalStorageService } from './local-storage.service';
 import { environment } from '../../environments/environment';
 
 @Injectable({
@@ -15,7 +16,8 @@ export class BookingService {
 
   constructor(
     private http: HttpClient,
-    private roomService: RoomService
+    private roomService: RoomService,
+    private localStorageService: LocalStorageService
   ) {}
 
   searchRooms(criteria: SearchCriteria): Observable<Room[]> {
@@ -24,6 +26,7 @@ export class BookingService {
   }
 
   createBooking(customerId: string, bookingData: BookingRequest): Observable<Booking> {
+    // Try API first, fallback to local storage
     const url = `${this.apiBaseUrl}/bookings`;
     
     const bookingPayload = {
@@ -37,13 +40,31 @@ export class BookingService {
 
     return this.http.post<Booking>(url, bookingPayload).pipe(
       catchError(error => {
-        console.error('Error creating booking:', error);
-        return throwError(() => error.error?.message || 'Failed to create booking');
+        console.log('API failed, using local storage for booking');
+        // Create booking in local storage
+        const newBooking: Booking = {
+          id: this.localStorageService.generateId(),
+          customerId,
+          roomId: bookingData.roomId,
+          checkInDate: bookingData.checkInDate,
+          checkOutDate: bookingData.checkOutDate,
+          guests: bookingData.guests,
+          totalAmount: 0, // Will be calculated based on room price
+          status: BookingStatus.PENDING,
+          paymentStatus: PaymentStatus.PENDING,
+          specialRequests: bookingData.specialRequests,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        this.localStorageService.saveBooking(newBooking);
+        return of(newBooking);
       })
     );
   }
 
   getBookingsByCustomer(customerId: string): Observable<Booking[]> {
+    // Try API first, fallback to local storage
     const url = `${this.apiBaseUrl}/bookings/customer/${customerId}`;
     
     return this.http.get<Booking[]>(url).pipe(
@@ -55,13 +76,14 @@ export class BookingService {
         updatedAt: new Date(booking.updatedAt)
       }))),
       catchError(error => {
-        console.error('Error fetching customer bookings:', error);
-        return throwError(() => error.error?.message || 'Failed to fetch bookings');
+        console.log('API failed, using local storage for customer bookings');
+        return this.localStorageService.getBookingsByCustomer(customerId);
       })
     );
   }
 
   getAllBookings(): Observable<Booking[]> {
+    // Try API first, fallback to local storage
     const url = `${this.apiBaseUrl}/bookings`;
     
     return this.http.get<Booking[]>(url).pipe(
@@ -73,13 +95,14 @@ export class BookingService {
         updatedAt: new Date(booking.updatedAt)
       }))),
       catchError(error => {
-        console.error('Error fetching all bookings:', error);
-        return throwError(() => error.error?.message || 'Failed to fetch bookings');
+        console.log('API failed, using local storage for all bookings');
+        return this.localStorageService.getBookings();
       })
     );
   }
 
   getBookingById(bookingId: string): Observable<Booking> {
+    // Try API first, fallback to local storage
     const url = `${this.apiBaseUrl}/bookings/${bookingId}`;
     
     return this.http.get<Booking>(url).pipe(
@@ -91,13 +114,21 @@ export class BookingService {
         updatedAt: new Date(booking.updatedAt)
       })),
       catchError(error => {
-        console.error('Error fetching booking:', error);
-        return throwError(() => error.error?.message || 'Failed to fetch booking');
+        console.log('API failed, using local storage for booking');
+        return this.localStorageService.getBookingById(bookingId).pipe(
+          map(booking => {
+            if (!booking) {
+              throw new Error('Booking not found');
+            }
+            return booking;
+          })
+        );
       })
     );
   }
 
   updateBooking(bookingId: string, updates: Partial<Booking>): Observable<Booking> {
+    // Try API first, fallback to local storage
     const url = `${this.apiBaseUrl}/bookings/${bookingId}`;
     
     // Convert dates to ISO string format for API
@@ -118,8 +149,8 @@ export class BookingService {
         updatedAt: new Date(booking.updatedAt)
       })),
       catchError(error => {
-        console.error('Error updating booking:', error);
-        return throwError(() => error.error?.message || 'Failed to update booking');
+        console.log('API failed, using local storage for updating booking');
+        return this.localStorageService.updateBooking(bookingId, updates);
       })
     );
   }
@@ -209,9 +240,23 @@ export class BookingService {
     return this.http.get<{ available: boolean }>(url, { params }).pipe(
       map(response => response.available),
       catchError(error => {
-        console.error('Error checking room availability:', error);
-        return throwError(() => error.error?.message || 'Failed to check availability');
+        console.log('API failed, using local storage for room availability');
+        // For local storage, we'll assume room is available
+        return of(true);
       })
     );
+  }
+
+  // Process payment and update booking
+  processPayment(bookingId: string, amount: number, transactionId: string): Observable<Booking> {
+    const updates = {
+      status: BookingStatus.CONFIRMED,
+      paymentStatus: PaymentStatus.PAID,
+      totalAmount: amount,
+      paymentTransactionId: transactionId,
+      paymentDate: new Date()
+    };
+
+    return this.updateBooking(bookingId, updates);
   }
 }

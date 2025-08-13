@@ -13,6 +13,8 @@ export interface Booking {
   updatedAt: Date;
   cancellationReason?: string;
   refundAmount?: number;
+  paymentTransactionId?: string;
+  paymentDate?: Date;
 }
 
 export enum BookingStatus {

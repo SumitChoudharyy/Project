@@ -10,15 +10,18 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { take } from 'rxjs/operators';
 import { Room } from '../../../models/room.model';
-import { BookingRequest } from '../../../models/booking.model';
+import { BookingRequest, BookingStatus, PaymentStatus } from '../../../models/booking.model';
 import { BookingService } from '../../../services/booking.service';
 import { selectUser } from '../../../store/auth/auth.selectors';
+import { PaymentFormComponent } from '../../../shared/components/payment-form/payment-form.component';
+import { PaymentSuccessPopupComponent, PaymentSuccessData } from '../../../shared/components/payment-success-popup/payment-success-popup.component';
+import { LocalStorageService } from '../../../services/local-storage.service';
 
 
 export interface CreateBookingData {
@@ -320,7 +323,9 @@ export class CreateBookingComponent implements OnInit {
     private snackBar: MatSnackBar,
     private router: Router,
     public dialogRef: MatDialogRef<CreateBookingComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CreateBookingData
+    @Inject(MAT_DIALOG_DATA) public data: CreateBookingData,
+    private dialog: MatDialog,
+    private localStorageService: LocalStorageService
   ) {
     this.bookingForm = this.fb.group({
       checkInDate: ['', Validators.required],
@@ -398,6 +403,9 @@ export class CreateBookingComponent implements OnInit {
         }
 
         const formValue = this.bookingForm.value;
+        const totalAmount = this.getTotalAmount();
+        
+        // Create booking first
         const bookingRequest: BookingRequest = {
           roomId: this.data.room.id,
           checkInDate: formValue.checkInDate,
@@ -408,9 +416,9 @@ export class CreateBookingComponent implements OnInit {
 
         this.bookingService.createBooking(user.id, bookingRequest).subscribe({
           next: (booking) => {
-            this.snackBar.open('Booking created successfully!', 'Close', { duration: 3000 });
-            this.dialogRef.close(booking);
-            this.router.navigate(['/bookings']);
+            this.isSubmitting = false;
+            // Show payment form
+            this.showPaymentForm(booking, totalAmount);
           },
           error: (error) => {
             console.error('Error creating booking:', error);
@@ -420,6 +428,69 @@ export class CreateBookingComponent implements OnInit {
         });
       });
     }
+  }
+
+  private showPaymentForm(booking: any, amount: number): void {
+    const paymentDialog = this.dialog.open(PaymentFormComponent, {
+      width: '600px',
+      disableClose: true,
+      data: { amount }
+    });
+
+    paymentDialog.componentInstance.setAmount(amount);
+
+    paymentDialog.afterClosed().subscribe(result => {
+      if (result && result.paymentInfo) {
+        this.processPayment(booking, amount, result.paymentInfo);
+      } else {
+        // User cancelled payment, delete the pending booking
+        this.localStorageService.deleteBooking(booking.id);
+        this.snackBar.open('Booking cancelled', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  private processPayment(booking: any, amount: number, paymentInfo: any): void {
+    // Simulate payment processing
+    const transactionId = 'TXN_' + Date.now();
+    
+    // Update booking with payment information
+    this.bookingService.processPayment(booking.id, amount, transactionId).subscribe({
+      next: (updatedBooking) => {
+        this.showPaymentSuccess(updatedBooking, transactionId);
+      },
+      error: (error) => {
+        console.error('Error processing payment:', error);
+        this.snackBar.open('Payment failed. Please try again.', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  private showPaymentSuccess(booking: any, transactionId: string): void {
+    const successData: PaymentSuccessData = {
+      bookingId: booking.id,
+      amount: booking.totalAmount,
+      transactionId: transactionId,
+      roomType: this.data.room.type,
+      checkInDate: booking.checkInDate,
+      checkOutDate: booking.checkOutDate
+    };
+
+    const successDialog = this.dialog.open(PaymentSuccessPopupComponent, {
+      width: '500px',
+      disableClose: true,
+      data: successData
+    });
+
+    successDialog.afterClosed().subscribe(result => {
+      if (result && result.action === 'viewBookings') {
+        this.dialogRef.close(booking);
+        this.router.navigate(['/bookings']);
+      } else {
+        this.dialogRef.close(booking);
+        this.router.navigate(['/dashboard']);
+      }
+    });
   }
 
   onCancel(): void {

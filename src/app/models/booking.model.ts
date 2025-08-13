@@ -15,6 +15,7 @@ export interface Booking {
   refundAmount?: number;
   paymentTransactionId?: string;
   paymentDate?: Date;
+  statusChangeNotes?: string;
 }
 
 export enum BookingStatus {

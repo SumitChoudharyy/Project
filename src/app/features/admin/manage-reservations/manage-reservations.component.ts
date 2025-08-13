@@ -13,9 +13,10 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, firstValueFrom } from 'rxjs';
 import { Booking, BookingStatus, PaymentStatus } from '../../../models/booking.model';
 import { BookingService } from '../../../services/booking.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
@@ -39,6 +40,7 @@ import { PopupService } from '../../../shared/services/popup.service';
     MatNativeDateModule,
     MatChipsModule,
     MatDialogModule,
+    MatCheckboxModule,
     ReactiveFormsModule,
     LoadingSpinnerComponent
   ],
@@ -79,6 +81,10 @@ import { PopupService } from '../../../shared/services/popup.service';
               <button mat-stroked-button (click)="refreshReservations()" [disabled]="isLoading">
                 <mat-icon>refresh</mat-icon>
                 Refresh
+              </button>
+              <button mat-stroked-button (click)="exportToCSV()" [disabled]="filteredReservations.length === 0">
+                <mat-icon>download</mat-icon>
+                Export CSV
               </button>
             </div>
 
@@ -140,7 +146,40 @@ import { PopupService } from '../../../shared/services/popup.service';
             </div>
 
             <div *ngIf="!isLoading && filteredReservations.length > 0" class="table-container">
+              <!-- Bulk Actions -->
+              <div class="bulk-actions" *ngIf="selectedCount > 0">
+                <span class="selected-count">{{ selectedCount }} booking(s) selected</span>
+                <button mat-raised-button color="accent" (click)="bulkConfirm()" 
+                        [disabled]="!canBulkConfirm()">
+                  <mat-icon>check_circle</mat-icon>
+                  Confirm Selected
+                </button>
+                <button mat-raised-button color="warn" (click)="bulkCancel()">
+                  <mat-icon>cancel</mat-icon>
+                  Cancel Selected
+                </button>
+              </div>
+
               <table mat-table [dataSource]="filteredReservations" class="reservations-table">
+                <!-- Selection Column -->
+                <ng-container matColumnDef="select">
+                  <th mat-header-cell *matHeaderCellDef>
+                    <mat-checkbox 
+                      (change)="$event ? masterToggle() : null"
+                      [checked]="isAllSelected"
+                      [indeterminate]="!isAllSelected && selectedCount > 0">
+                    </mat-checkbox>
+                  </th>
+                  <td mat-cell *matCellDef="let booking">
+                    <mat-checkbox 
+                      (click)="$event.stopPropagation()"
+                      (change)="onSelectionChange(booking.id, $event.checked)"
+                      [checked]="selection.has(booking.id)"
+                      [disabled]="!canSelect(booking)">
+                    </mat-checkbox>
+                  </td>
+                </ng-container>
+
                 <!-- Booking ID Column -->
                 <ng-container matColumnDef="id">
                   <th mat-header-cell *matHeaderCellDef>Booking ID</th>
@@ -338,6 +377,22 @@ import { PopupService } from '../../../shared/services/popup.service';
       gap: 4px;
     }
 
+    .bulk-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 16px;
+      background-color: #e3f2fd;
+      border-radius: 8px;
+      border: 1px solid #bbdefb;
+    }
+
+    .selected-count {
+      font-weight: 500;
+      color: #1976d2;
+    }
+
     .status-pending {
       background-color: #fff3e0;
       color: #e65100;
@@ -435,7 +490,7 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
   allReservations: Booking[] = [];
   filteredReservations: Booking[] = [];
   isLoading = false;
-  displayedColumns: string[] = ['id', 'customerId', 'roomId', 'checkInDate', 'checkOutDate', 'guests', 'status', 'paymentStatus', 'totalAmount', 'actions'];
+  displayedColumns: string[] = ['select', 'id', 'customerId', 'roomId', 'checkInDate', 'checkOutDate', 'guests', 'status', 'paymentStatus', 'totalAmount', 'actions'];
   
   filterForm: FormGroup;
   stats = {
@@ -444,6 +499,11 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
     completed: 0,
     cancelled: 0
   };
+
+  // Selection state
+  selection = new Map<string, boolean>();
+  isAllSelected = false;
+  selectedCount = 0;
 
   bookingStatuses = Object.values(BookingStatus);
   paymentStatuses = Object.values(PaymentStatus);
@@ -485,6 +545,11 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
         this.filteredReservations = bookings;
         this.updateStats();
         this.isLoading = false;
+        
+        // Clear any existing selections
+        this.selection.clear();
+        this.selectedCount = 0;
+        this.isAllSelected = false;
       },
       error: (error) => {
         console.error('Error loading reservations:', error);
@@ -548,6 +613,11 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
       
       return matches;
     });
+
+    // Clear selection when filters change
+    this.selection.clear();
+    this.selectedCount = 0;
+    this.isAllSelected = false;
   }
 
   refreshReservations(): void {
@@ -590,4 +660,212 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
       }
     });
   }
-} 
+
+  // Selection methods
+  masterToggle(): void {
+    if (this.isAllSelected) {
+      this.selection.clear();
+      this.selectedCount = 0;
+    } else {
+      this.filteredReservations.forEach(booking => {
+        if (this.canSelect(booking)) {
+          this.selection.set(booking.id, true);
+        }
+      });
+      this.selectedCount = this.selection.size;
+    }
+    this.isAllSelected = !this.isAllSelected;
+  }
+
+  canSelect(booking: Booking): boolean {
+    // Only allow selection of pending or confirmed bookings
+    return booking.status === BookingStatus.PENDING || booking.status === BookingStatus.CONFIRMED;
+  }
+
+  canBulkConfirm(): boolean {
+    // Check if any selected bookings can be confirmed
+    return Array.from(this.selection.keys()).some(id => {
+      const booking = this.filteredReservations.find(b => b.id === id);
+      return booking && booking.status === BookingStatus.PENDING;
+    });
+  }
+
+  bulkConfirm(): void {
+    const selectedBookings = this.filteredReservations.filter(booking => 
+      this.selection.has(booking.id) && booking.status === BookingStatus.PENDING
+    );
+
+    if (selectedBookings.length === 0) {
+      this.snackBar.open('No pending bookings selected for confirmation', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.popupService.confirmSimple(
+      `Confirm ${selectedBookings.length} pending booking(s)?`,
+      'Bulk Confirm Bookings'
+    ).subscribe(confirmed => {
+      if (confirmed) {
+        this.processBulkConfirm(selectedBookings);
+      }
+    });
+  }
+
+  bulkCancel(): void {
+    const selectedBookings = this.filteredReservations.filter(booking => 
+      this.selection.has(booking.id) && 
+      (booking.status === BookingStatus.PENDING || booking.status === BookingStatus.CONFIRMED)
+    );
+
+    if (selectedBookings.length === 0) {
+      this.snackBar.open('No cancellable bookings selected', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.popupService.confirmDanger(
+      `Cancel ${selectedBookings.length} booking(s)? This action cannot be undone.`,
+      'Bulk Cancel Bookings'
+    ).subscribe(confirmed => {
+      if (confirmed) {
+        this.processBulkCancel(selectedBookings);
+      }
+    });
+  }
+
+  private processBulkConfirm(bookings: Booking[]): void {
+    this.isLoading = true;
+    let successCount = 0;
+    let errorCount = 0;
+
+    const confirmPromises = bookings.map(booking => 
+      firstValueFrom(this.bookingService.updateBooking(booking.id, { 
+        status: BookingStatus.CONFIRMED,
+        updatedAt: new Date()
+      }))
+    );
+
+    Promise.allSettled(confirmPromises).then(results => {
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      });
+
+      this.isLoading = false;
+      this.selection.clear();
+      this.selectedCount = 0;
+      this.isAllSelected = false;
+
+      if (successCount > 0) {
+        this.snackBar.open(`${successCount} booking(s) confirmed successfully`, 'Close', { duration: 3000 });
+        this.loadReservations();
+      }
+      
+      if (errorCount > 0) {
+        this.snackBar.open(`${errorCount} booking(s) failed to confirm`, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  private processBulkCancel(bookings: Booking[]): void {
+    this.isLoading = true;
+    let successCount = 0;
+    let errorCount = 0;
+
+    const cancelPromises = bookings.map(booking => 
+      firstValueFrom(this.bookingService.cancelBooking(booking.id, 'Bulk cancelled by admin'))
+    );
+
+    Promise.allSettled(cancelPromises).then(results => {
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      });
+
+      this.isLoading = false;
+      this.selection.clear();
+      this.selectedCount = 0;
+      this.isAllSelected = false;
+
+      if (successCount > 0) {
+        this.snackBar.open(`${successCount} booking(s) cancelled successfully`, 'Close', { duration: 3000 });
+        this.loadReservations();
+      }
+      
+      if (errorCount > 0) {
+        this.snackBar.open(`${errorCount} booking(s) failed to cancel`, 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  // Update selection count when filters change
+  private updateSelectionCount(): void {
+    this.selectedCount = this.selection.size;
+    this.isAllSelected = this.selectedCount > 0 && 
+                         this.selectedCount === this.filteredReservations.filter(b => this.canSelect(b)).length;
+  }
+
+  // Handle individual selection changes
+  onSelectionChange(bookingId: string, checked: boolean): void {
+    if (checked) {
+      this.selection.set(bookingId, true);
+    } else {
+      this.selection.delete(bookingId);
+    }
+    this.updateSelectionCount();
+  }
+
+  exportToCSV(): void {
+    if (this.filteredReservations.length === 0) {
+      this.snackBar.open('No reservations to export', 'Close', { duration: 3000 });
+      return;
+    }
+
+    const headers = [
+      'Booking ID',
+      'Customer ID',
+      'Room ID',
+      'Check-in Date',
+      'Check-out Date',
+      'Guests',
+      'Status',
+      'Payment Status',
+      'Total Amount',
+      'Special Requests',
+      'Created Date'
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...this.filteredReservations.map(booking => [
+        booking.id,
+        booking.customerId,
+        booking.roomId,
+        booking.checkInDate.toISOString().split('T')[0],
+        booking.checkOutDate.toISOString().split('T')[0],
+        booking.guests,
+        booking.status,
+        booking.paymentStatus,
+        booking.totalAmount,
+        `"${(booking.specialRequests || '').replace(/"/g, '""')}"`,
+        booking.createdAt.toISOString().split('T')[0]
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reservations_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    this.snackBar.open('CSV exported successfully', 'Close', { duration: 3000 });
+  }
+}

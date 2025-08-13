@@ -19,6 +19,7 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
       <mat-card class="search-form-card">
         <mat-card-header>
           <mat-card-title>Find Your Perfect Room</mat-card-title>
+          <mat-card-subtitle>Search by criteria or browse all available rooms</mat-card-subtitle>
         </mat-card-header>
         
         <mat-card-content>
@@ -64,6 +65,9 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
               <button mat-raised-button color="primary" type="submit" [disabled]="searchForm.invalid || isSearching" class="search-button">
                 <span *ngIf="!isSearching">Search</span>
                 <mat-spinner *ngIf="isSearching" diameter="20"></mat-spinner>
+              </button>
+              <button mat-stroked-button type="button" (click)="showAllRooms()" [disabled]="isSearching" class="show-all-button">
+                Show All Rooms
               </button>
             </div>
 
@@ -123,7 +127,7 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
         <div class="results-header">
           <h2>Available Rooms</h2>
           <div class="results-count" *ngIf="!isSearching">
-            {{ searchResults.length }} room(s) found
+            {{ searchResults.length }} room(s) available
           </div>
           <div class="sort-options" *ngIf="searchResults.length > 0">
             <mat-form-field appearance="outline" class="sort-field">
@@ -150,24 +154,24 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
 
         <div *ngIf="!isSearching && searchResults.length > 0" class="rooms-grid">
           <mat-card *ngFor="let room of searchResults" class="room-card">
-            <div class="room-image" [style.background-image]="'url(' + room.images[0] + ')'"></div>
+            <div class="room-image" [style.background-image]="'url(' + (room.images && room.images.length > 0 ? room.images[0] : '/assets/images/default-room.jpg') + ')'"></div>
             
             <mat-card-content class="room-content">
               <div class="room-header">
-                <h3>{{ room.type | titlecase }} Room</h3>
+                <h3>{{ room.category | titlecase }} Room</h3>
                 <div class="room-number">Room {{ room.roomNumber }}</div>
               </div>
               
-              <p class="room-description">{{ room.description }}</p>
+              <p class="room-description">{{ room.description || 'Comfortable and well-appointed room for your stay.' }}</p>
               
               <div class="room-details">
                 <div class="detail-item">
                   <mat-icon>people</mat-icon>
-                  <span>Up to {{ room.maxOccupancy }} guests</span>
+                  <span>Up to {{ room.capacity }} guests</span>
                 </div>
                 <div class="detail-item">
                   <mat-icon>layers</mat-icon>
-                  <span>Floor {{ room.floor }}</span>
+                  <span>Floor {{ room.floor || '1' }}</span>
                 </div>
               </div>
 
@@ -229,6 +233,12 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
 
     .search-button {
       flex: 0 0 120px;
+      height: 56px;
+      margin-top: 8px;
+    }
+
+    .show-all-button {
+      flex: 0 0 140px;
       height: 56px;
       margin-top: 8px;
     }
@@ -324,6 +334,8 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
       height: 200px;
       background-size: cover;
       background-position: center;
+      background-color: #f5f5f5;
+      background-repeat: no-repeat;
     }
 
     .room-content {
@@ -426,7 +438,8 @@ import { CreateBookingComponent, CreateBookingData } from '../create-booking/cre
         gap: 0;
       }
 
-      .search-button {
+      .search-button,
+      .show-all-button {
         flex: 1;
         margin-top: 16px;
       }
@@ -480,6 +493,40 @@ export class SearchRoomsComponent implements OnInit {
       checkInDate: today,
       checkOutDate: tomorrow
     });
+
+    // Load all rooms initially to show available options
+    this.loadAllRooms();
+  }
+
+  private loadAllRooms(): void {
+    this.isSearching = true;
+    this.roomService.getAllRooms().subscribe({
+      next: (rooms) => {
+        this.searchResults = rooms;
+        this.sortResults();
+        this.isSearching = false;
+        this.hasSearched = true;
+      },
+      error: (error) => {
+        console.error('Error loading rooms:', error);
+        this.searchResults = [];
+        this.isSearching = false;
+      }
+    });
+  }
+
+  showAllRooms(): void {
+    // Reset form filters
+    this.searchForm.patchValue({
+      roomType: '',
+      minPrice: '',
+      maxPrice: '',
+      amenities: []
+    });
+    this.selectedAmenities = [];
+    
+    // Load all rooms
+    this.loadAllRooms();
   }
 
   dateRangeValidator(group: FormGroup) {
@@ -499,31 +546,57 @@ export class SearchRoomsComponent implements OnInit {
       this.isSearching = true;
       this.hasSearched = true;
       
-      const formValue = this.searchForm.value;
-      const criteria: SearchCriteria = {
-        checkInDate: formValue.checkInDate,
-        checkOutDate: formValue.checkOutDate,
-        guests: formValue.guests,
-        roomType: formValue.roomType || undefined,
-        minPrice: formValue.minPrice || undefined,
-        maxPrice: formValue.maxPrice || undefined,
-        amenities: this.selectedAmenities
-      };
-
-      // Use the new room service for API integration
-      this.roomService.searchRoomsWithCriteria(criteria).subscribe({
+      // Call getAllRooms API to get all rooms
+      this.roomService.getAllRooms().subscribe({
         next: (rooms) => {
-          this.searchResults = rooms;
+          // Apply client-side filtering based on form criteria
+          this.searchResults = this.filterRooms(rooms);
           this.sortResults();
           this.isSearching = false;
         },
         error: (error) => {
-          console.error('Search error:', error);
+          console.error('Error fetching rooms:', error);
           this.searchResults = [];
           this.isSearching = false;
         }
       });
     }
+  }
+
+  private filterRooms(rooms: Room[]): Room[] {
+    const formValue = this.searchForm.value;
+    
+    return rooms.filter(room => {
+      // Filter by room type
+      if (formValue.roomType && room.category !== formValue.roomType) {
+        return false;
+      }
+      
+      // Filter by price range
+      if (formValue.minPrice && room.pricePerNight < formValue.minPrice) {
+        return false;
+      }
+      if (formValue.maxPrice && room.pricePerNight > formValue.maxPrice) {
+        return false;
+      }
+      
+      // Filter by amenities
+      if (this.selectedAmenities.length > 0) {
+        const hasAllAmenities = this.selectedAmenities.every(amenity => 
+          room.amenities?.includes(amenity)
+        );
+        if (!hasAllAmenities) {
+          return false;
+        }
+      }
+      
+      // Filter by guest capacity
+      if (formValue.guests && room.capacity < formValue.guests) {
+        return false;
+      }
+      
+      return true;
+    });
   }
 
   onAmenityChange(amenity: string, event: any): void {
@@ -550,10 +623,10 @@ export class SearchRoomsComponent implements OnInit {
         this.searchResults.sort((a, b) => b.pricePerNight - a.pricePerNight);
         break;
       case 'type':
-        this.searchResults.sort((a, b) => a.type.localeCompare(b.type));
+        this.searchResults.sort((a, b) => a.category.localeCompare(b.category));
         break;
       case 'capacity':
-        this.searchResults.sort((a, b) => b.maxOccupancy - a.maxOccupancy);
+        this.searchResults.sort((a, b) => b.capacity - a.capacity);
         break;
     }
   }

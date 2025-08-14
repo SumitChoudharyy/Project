@@ -313,7 +313,7 @@ export class PaymentFormComponent implements OnInit {
   }
 
   onCancel(): void {
-    this.dialogRef.close();
+    // Handle cancel action
   }
 
   getPaymentInfo(): PaymentInfo | null {

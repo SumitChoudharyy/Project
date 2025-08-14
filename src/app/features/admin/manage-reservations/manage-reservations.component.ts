@@ -21,6 +21,7 @@ import { Booking, BookingStatus, PaymentStatus } from '../../../models/booking.m
 import { BookingService } from '../../../services/booking.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { PopupService } from '../../../shared/services/popup.service';
+import { NewReservationDialogComponent } from './new-reservation-dialog/new-reservation-dialog.component';
 
 @Component({
   selector: 'app-manage-reservations',
@@ -625,8 +626,21 @@ export class ManageReservationsComponent implements OnInit, OnDestroy {
   }
 
   openNewReservationDialog(): void {
-    // TODO: Implement new reservation dialog
-    this.snackBar.open('New reservation functionality coming soon', 'Close', { duration: 3000 });
+    const dialogRef = this.dialog.open(NewReservationDialogComponent, {
+      width: '600px',
+      maxWidth: '90vw',
+      disableClose: true
+    });
+
+    dialogRef.afterClosed().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(result => {
+      if (result) {
+        // Refresh the reservations list after creating a new one
+        this.loadReservations();
+        this.snackBar.open('New reservation created successfully!', 'Close', { duration: 3000 });
+      }
+    });
   }
 
   viewBookingDetails(booking: Booking): void {

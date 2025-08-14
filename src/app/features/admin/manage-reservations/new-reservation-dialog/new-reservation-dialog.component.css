@@ -1,0 +1,50 @@
+.new-reservation-dialog {
+  min-width: 500px;
+  max-width: 600px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-field {
+  flex: 1;
+}
+
+.booking-summary {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+
+.booking-summary h4 {
+  margin: 0 0 16px 0;
+  color: #1976d2;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.total-amount {
+  font-weight: bold;
+  color: #1976d2;
+  font-size: 18px;
+}
+
+@media (max-width: 600px) {
+  .new-reservation-dialog {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

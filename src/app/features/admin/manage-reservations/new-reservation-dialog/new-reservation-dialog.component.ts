@@ -13,11 +13,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, Subject, takeUntil, startWith, map } from 'rxjs';
-import { Room } from '../../../models/room.model';
-import { User } from '../../../models/user.model';
-import { BookingRequest } from '../../../models/booking.model';
-import { RoomService } from '../../../services/room.service';
-import { BookingService } from '../../../services/booking.service';
+import { Room } from '../../../../models/room.model';
+import { User } from '../../../../models/user.model';
+import { BookingRequest } from '../../../../models/booking.model';
+import { RoomService } from '../../../../services/room.service';
+import { BookingService } from '../../../../services/booking.service';
 
 @Component({
   selector: 'app-new-reservation-dialog',
@@ -36,172 +36,8 @@ import { BookingService } from '../../../services/booking.service';
     MatIconModule,
     MatProgressSpinnerModule
   ],
-  template: `
-    <div class="new-reservation-dialog">
-      <h2 mat-dialog-title>Create New Reservation</h2>
-      
-      <form [formGroup]="reservationForm" (ngSubmit)="onSubmit()">
-        <mat-dialog-content>
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Customer Email</mat-label>
-              <input 
-                type="email" 
-                matInput 
-                formControlName="customerEmail" 
-                placeholder="Enter customer email"
-                [matAutocomplete]="customerAuto">
-              <mat-autocomplete #customerAuto="matAutocomplete" (optionSelected)="onCustomerSelected($event)">
-                <mat-option *ngFor="let customer of filteredCustomers$ | async" [value]="customer.email">
-                  {{ customer.firstName }} {{ customer.lastName }} ({{ customer.email }})
-                </mat-option>
-              </mat-autocomplete>
-              <mat-error *ngIf="reservationForm.get('customerEmail')?.hasError('required')">
-                Customer email is required
-              </mat-error>
-              <mat-error *ngIf="reservationForm.get('customerEmail')?.hasError('email')">
-                Please enter a valid email
-              </mat-error>
-            </mat-form-field>
-          </div>
-
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Room</mat-label>
-              <mat-select formControlName="roomId" required>
-                <mat-option *ngFor="let room of availableRooms" [value]="room.id">
-                  {{ room.roomNumber }} - {{ room.category }} ({{ room.capacity }} guests) - ${{ room.pricePerNight }}/night
-                </mat-option>
-              </mat-select>
-              <mat-error *ngIf="reservationForm.get('roomId')?.hasError('required')">
-                Room selection is required
-              </mat-error>
-            </mat-form-field>
-          </div>
-
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Check-in Date</mat-label>
-              <input matInput [matDatepicker]="checkInPicker" formControlName="checkInDate" required>
-              <mat-datepicker-toggle matSuffix [for]="checkInPicker"></mat-datepicker-toggle>
-              <mat-datepicker #checkInPicker></mat-datepicker>
-              <mat-error *ngIf="reservationForm.get('checkInDate')?.hasError('required')">
-                Check-in date is required
-              </mat-error>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Check-out Date</mat-label>
-              <input matInput [matDatepicker]="checkOutPicker" formControlName="checkOutDate" required>
-              <mat-datepicker-toggle matSuffix [for]="checkOutPicker"></mat-datepicker-toggle>
-              <mat-datepicker #checkOutPicker></mat-datepicker>
-              <mat-error *ngIf="reservationForm.get('checkOutDate')?.hasError('required')">
-                Check-out date is required
-              </mat-error>
-            </mat-form-field>
-          </div>
-
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Number of Guests</mat-label>
-              <input type="number" matInput formControlName="guests" min="1" required>
-              <mat-error *ngIf="reservationForm.get('guests')?.hasError('required')">
-                Number of guests is required
-              </mat-error>
-              <mat-error *ngIf="reservationForm.get('guests')?.hasError('min')">
-                At least 1 guest is required
-              </mat-error>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline" class="form-field">
-              <mat-label>Special Requests</mat-label>
-              <textarea matInput formControlName="specialRequests" rows="3" placeholder="Any special requests or notes"></textarea>
-            </mat-form-field>
-          </div>
-
-          <div class="booking-summary" *ngIf="selectedRoom && reservationForm.get('checkInDate')?.value && reservationForm.get('checkOutDate')?.value">
-            <h4>Booking Summary</h4>
-            <div class="summary-item">
-              <span>Room:</span>
-              <span>{{ selectedRoom.roomNumber }} - {{ selectedRoom.category }}</span>
-            </div>
-            <div class="summary-item">
-              <span>Duration:</span>
-              <span>{{ getDurationDays() }} nights</span>
-            </div>
-            <div class="summary-item">
-              <span>Total Amount:</span>
-              <span class="total-amount">${{ calculateTotalAmount() }}</span>
-            </div>
-          </div>
-        </mat-dialog-content>
-
-        <mat-dialog-actions align="end">
-          <button type="button" mat-button mat-dialog-close>Cancel</button>
-          <button 
-            type="submit" 
-            mat-raised-button 
-            color="primary" 
-            [disabled]="reservationForm.invalid || isSubmitting">
-            <mat-spinner *ngIf="isSubmitting" diameter="20"></mat-spinner>
-            <span *ngIf="!isSubmitting">Create Reservation</span>
-          </button>
-        </mat-dialog-actions>
-      </form>
-    </div>
-  `,
-  styles: [`
-    .new-reservation-dialog {
-      min-width: 500px;
-      max-width: 600px;
-    }
-
-    .form-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .form-field {
-      flex: 1;
-    }
-
-    .booking-summary {
-      margin-top: 24px;
-      padding: 16px;
-      background-color: #f5f5f5;
-      border-radius: 8px;
-    }
-
-    .booking-summary h4 {
-      margin: 0 0 16px 0;
-      color: #1976d2;
-    }
-
-    .summary-item {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-
-    .total-amount {
-      font-weight: bold;
-      color: #1976d2;
-      font-size: 18px;
-    }
-
-    @media (max-width: 600px) {
-      .new-reservation-dialog {
-        min-width: 100%;
-        max-width: 100%;
-      }
-
-      .form-row {
-        flex-direction: column;
-        gap: 8px;
-      }
-    }
-  `]
+  templateUrl: './new-reservation-dialog.component.html',
+  styleUrls: ['./new-reservation-dialog.component.css']
 })
 export class NewReservationDialogComponent implements OnInit {
   reservationForm: FormGroup;
